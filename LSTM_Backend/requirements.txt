@@ -13,3 +13,6 @@ joblib
 # Database Interaction
 sqlalchemy
 psycopg2-binary
+
+# Add this to the existing list
+gunicorn==23.0.0

@@ -12,6 +12,8 @@ import * as jose from "jose";
 import "./Search.css";
 import { useGeolocation } from "../hooks/useGeolocation";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+
 function Search() {
   const routerLocation = useLocation();
   const navigate = useNavigate();
@@ -76,7 +78,7 @@ function Search() {
           },
         );
         const exportedPublicKey = await jose.exportJWK(publicKey);
-        const response = await fetch("http://localhost:3000/api/energy/handshake", {
+        const response = await fetch(`${API_BASE_URL}/api/energy/handshake`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clientPublicKey: exportedPublicKey }),
@@ -136,7 +138,7 @@ function Search() {
         .setProtectedHeader({ alg: "ECDH-ES+A256KW", enc: "A256GCM" })
         .encrypt(serverKey);
 
-      const response = await fetch("http://localhost:3000/api/energy/update", {
+      const response = await fetch(`${API_BASE_URL}/api/energy/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-client-id": clientId },
         body: JSON.stringify({ encryptedData: jwe }),

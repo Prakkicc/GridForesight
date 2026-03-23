@@ -34,9 +34,11 @@ def create_app():
     app.register_blueprint(main_bp)
     return app
 
+# Expose app for gunicorn (run:app)
+app = create_app()
+
 if __name__ == "__main__":
     print("[7/7] Starting Flask Server...")
-    app = create_app()
     port = int(os.environ.get("PORT", 5001))
     print(f"--- Smart Grid ML Backend Running on http://localhost:{port} ---")
     app.run(host='0.0.0.0', port=port, debug=False)
