@@ -8,7 +8,9 @@ import {
 import { Redis } from "ioredis";
 
 // Initialize Redis client
-const redis = new Redis();
+const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+  tls: process.env.REDIS_URL?.startsWith("rediss://") ? {} : undefined,
+});
 
 type PrivateKeyType = Awaited<ReturnType<typeof generateKeyPair>>["privateKey"];
 

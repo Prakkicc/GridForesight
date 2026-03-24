@@ -12,7 +12,8 @@ import * as jose from "jose";
 import "./Search.css";
 import { useGeolocation } from "../hooks/useGeolocation";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 function Search() {
   const routerLocation = useLocation();
@@ -52,7 +53,7 @@ function Search() {
   const currentSystemHour = new Date().getHours();
   const [timelineHour, setTimelineHour] = useState(currentSystemHour);
   const isTimelineShifted = timelineHour !== currentSystemHour;
-  
+
   const [agentMode, setAgentMode] = useState(false);
   const [headcount, setHeadcount] = useState(45);
   const [isAgentLoading, setIsAgentLoading] = useState(false);
@@ -68,27 +69,34 @@ function Search() {
   });
 
   useEffect(() => {
+    // src/pages/Search.jsx
+
     async function setupSecureSession() {
       try {
-        console.log("DEBUG: Starting Handshake..."); // Add this
         const { publicKey, privateKey } = await jose.generateKeyPair(
           "ECDH-ES+A256KW",
-          {
-            crv: "P-256",
-          },
+          { crv: "P-256" },
         );
         const exportedPublicKey = await jose.exportJWK(publicKey);
+
         const response = await fetch(`${API_BASE_URL}/api/energy/handshake`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clientPublicKey: exportedPublicKey }),
         });
+
+        // --- ADD THIS CHECK ---
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Handshake failed on server");
+        }
+
         const { serverPublicKey, clientId: cid } = await response.json();
-        console.log("DEBUG: Handshake Successful. ClientID:", cid); // Add this
+        console.log("DEBUG: Handshake Successful. ClientID:", cid);
         setSecureSession({ privateKey, serverPublicKey });
         setClientId(cid);
       } catch (e) {
-        console.error("DEBUG: Handshake Failed:", e); // Update this
+        console.error("DEBUG: Handshake Failed:", e.message);
       }
     }
     setupSecureSession();
@@ -133,33 +141,51 @@ function Search() {
         devices: allDevices,
       };
 
-      const serverKey = await jose.importJWK(secureSession.serverPublicKey, "ECDH-ES+A256KW");
-      const jwe = await new jose.CompactEncrypt(new TextEncoder().encode(JSON.stringify(payload)))
+      const serverKey = await jose.importJWK(
+        secureSession.serverPublicKey,
+        "ECDH-ES+A256KW",
+      );
+      const jwe = await new jose.CompactEncrypt(
+        new TextEncoder().encode(JSON.stringify(payload)),
+      )
         .setProtectedHeader({ alg: "ECDH-ES+A256KW", enc: "A256GCM" })
         .encrypt(serverKey);
 
       const response = await fetch(`${API_BASE_URL}/api/energy/update`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-client-id": clientId },
+        headers: {
+          "Content-Type": "application/json",
+          "x-client-id": clientId,
+        },
         body: JSON.stringify({ encryptedData: jwe }),
       });
 
       const encryptedResult = await response.json();
-      const { plaintext } = await jose.compactDecrypt(encryptedResult.encryptedData, secureSession.privateKey);
+      const { plaintext } = await jose.compactDecrypt(
+        encryptedResult.encryptedData,
+        secureSession.privateKey,
+      );
       const result = JSON.parse(new TextDecoder().decode(plaintext));
 
       if (result.success) {
-        const { updatedDevices, predictedPeak, limitExceeded, excessPower } = result.data;
+        const { updatedDevices, predictedPeak, limitExceeded, excessPower } =
+          result.data;
         const predictedTurnOffs = [];
 
         // CHANGE: We only identify what WOULD happen, we don't update localDev.suggested_active
         updatedDevices.forEach((remoteDev) => {
           const roomsList = COMPANY_INFO[selectedCompany].rooms;
           for (const r of roomsList) {
-            const localDev = globalRoomDevices[selectedCompany]?.[r]?.find((d) => d.id === remoteDev.device_id);
+            const localDev = globalRoomDevices[selectedCompany]?.[r]?.find(
+              (d) => d.id === remoteDev.device_id,
+            );
             if (localDev) {
               // If it's active locally but the backend predicts it should be OFF
-              if (localDev.active && localDev.suggested_active !== false && !remoteDev.is_device_active) {
+              if (
+                localDev.active &&
+                localDev.suggested_active !== false &&
+                !remoteDev.is_device_active
+              ) {
                 predictedTurnOffs.push(localDev.label);
               }
               break;
@@ -168,12 +194,12 @@ function Search() {
         });
 
         // Show the report with predictions
-        setAgentActions({ 
-          turnedOff: predictedTurnOffs, 
+        setAgentActions({
+          turnedOff: predictedTurnOffs,
           predictedPeak,
           excessPower,
           limitExceeded,
-          currentPower: parseFloat(companyTotalPower.toFixed(2)) 
+          currentPower: parseFloat(companyTotalPower.toFixed(2)),
         });
         setShowAgentReport(true);
       }
@@ -554,7 +580,10 @@ function Search() {
               {isAgentLoading ? (
                 <Loader size={24} className="spin-animation" color="#fff" />
               ) : (
-                <Bot size={24} color={isTimelineShifted ? "#af38ff" : "#00f3ff"} />
+                <Bot
+                  size={24}
+                  color={isTimelineShifted ? "#af38ff" : "#00f3ff"}
+                />
               )}
               <span
                 style={{
@@ -562,7 +591,11 @@ function Search() {
                   color: "inherit",
                 }}
               >
-                {isAgentLoading ? "Analyzing..." : isTimelineShifted ? "Predict Peak" : "Power Agent"}
+                {isAgentLoading
+                  ? "Analyzing..."
+                  : isTimelineShifted
+                    ? "Predict Peak"
+                    : "Power Agent"}
               </span>
             </button>
           </div>
@@ -623,9 +656,14 @@ function Search() {
         {/* Power Agent Report Popup */}
         {showAgentReport && (
           <div className="agent-report-overlay">
-            <div className={`agent-report-modal glass-panel ${agentActions.limitExceeded ? "glow-magenta" : "glow-cyan"}`}>
+            <div
+              className={`agent-report-modal glass-panel ${agentActions.limitExceeded ? "glow-magenta" : "glow-cyan"}`}
+            >
               <div className="report-header">
-                <Bot size={32} color={agentActions.limitExceeded ? "#ff0055" : "#00f3ff"} />
+                <Bot
+                  size={32}
+                  color={agentActions.limitExceeded ? "#ff0055" : "#00f3ff"}
+                />
                 <h3>
                   Power Agent <span className="report-status">Report</span>
                 </h3>
@@ -635,8 +673,9 @@ function Search() {
                 <p className="report-summary">
                   {agentActions.limitExceeded ? (
                     <span style={{ color: "#ffbaba" }}>
-                      Critical limit breach predicted. System is <strong>{agentActions.excessPower} kW</strong> above safe capacity. 
-                      Load shifting has been applied.
+                      Critical limit breach predicted. System is{" "}
+                      <strong>{agentActions.excessPower} kW</strong> above safe
+                      capacity. Load shifting has been applied.
                     </span>
                   ) : (
                     "System operating within safe limits. Optimization complete."
@@ -656,23 +695,50 @@ function Search() {
                   </div>
                 ) : (
                   <>
-                    <div className="stats-summary-box" style={{ 
-                      background: "rgba(0, 243, 255, 0.05)", 
-                      padding: "1rem", 
-                      borderRadius: "8px", 
-                      border: "1px solid rgba(0, 243, 255, 0.2)",
-                      marginTop: "1rem" 
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                    <div
+                      className="stats-summary-box"
+                      style={{
+                        background: "rgba(0, 243, 255, 0.05)",
+                        padding: "1rem",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(0, 243, 255, 0.2)",
+                        marginTop: "1rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
                         <span style={{ color: "#a0aec0" }}>Current Draw:</span>
-                        <span style={{ color: "#fff", fontWeight: "bold" }}>{agentActions.currentPower} kW</span>
+                        <span style={{ color: "#fff", fontWeight: "bold" }}>
+                          {agentActions.currentPower} kW
+                        </span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#a0aec0" }}>Forecasted Peak:</span>
-                        <span style={{ color: "#00f3ff", fontWeight: "bold" }}>{agentActions.predictedPeak} kW</span>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span style={{ color: "#a0aec0" }}>
+                          Forecasted Peak:
+                        </span>
+                        <span style={{ color: "#00f3ff", fontWeight: "bold" }}>
+                          {agentActions.predictedPeak} kW
+                        </span>
                       </div>
                     </div>
-                    <p style={{ fontSize: "0.85rem", color: "#63b3ed", marginTop: "1rem", fontStyle: "italic" }}>
+                    <p
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#63b3ed",
+                        marginTop: "1rem",
+                        fontStyle: "italic",
+                      }}
+                    >
                       * Optimization active. Continuing real-time monitoring.
                     </p>
                   </>
@@ -682,9 +748,13 @@ function Search() {
               <button
                 className="report-close-btn"
                 onClick={() => setShowAgentReport(false)}
-                style={{ border: agentActions.limitExceeded ? "1px solid #ff0055" : "" }}
+                style={{
+                  border: agentActions.limitExceeded ? "1px solid #ff0055" : "",
+                }}
               >
-                {agentActions.limitExceeded ? "Acknowledge & Sync" : "Dismiss Report"}
+                {agentActions.limitExceeded
+                  ? "Acknowledge & Sync"
+                  : "Dismiss Report"}
               </button>
             </div>
           </div>
